@@ -1,0 +1,15 @@
+#Build artefacts
+build*/
+
+#CMake
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
+
+#Ninja
+.ninja*
+*.ninja
+
+#Config files and folders
+compile_commands.json
+.clangd/
