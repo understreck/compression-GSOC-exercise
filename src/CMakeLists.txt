@@ -3,13 +3,7 @@ file(
   "./*.cpp"
 )
 
-if(BUILD_SHARED_LIBS)
-  add_library(compression-exercise SHARED)
-  add_library(compression-exercise::shared ALIAS compression-exercise)
-else()
-  add_library(compression-exercise STATIC)
-  add_library(compression-exercise::static ALIAS compression-exercise)
-endif()
+add_executable(compression-exercise)
 
 target_sources(
   compression-exercise
@@ -21,7 +15,7 @@ target_include_directories(
   PUBLIC ${PROJECT_SOURCE_DIR}/include
 )
 
-target_link_libraries(compression-exercise)
+target_link_libraries(compression-exercise ZLIB::ZLIB)
 
 set_target_properties(
   compression-exercise
