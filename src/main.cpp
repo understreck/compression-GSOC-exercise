@@ -28,6 +28,7 @@ DecompressResult my_decompress(std::vector<Byte> const &data,
 
 enum OPTION {
   INVALID,
+  HELP,
   INPUT,
   OUTPUT,
   FILENAME,
@@ -95,6 +96,8 @@ int main(int argc, char *argv[]) {
         option.outChannel = STRING;
         option.outData = args[++i];
       } break;
+      case HELP:
+        [[fallthrough]];
       default: {
         print_help();
         exit(1);
@@ -113,7 +116,6 @@ int main(int argc, char *argv[]) {
 
   auto in = std::vector<Byte>{};
   in.reserve(65'536); // 2^16
-
 
   // auto in = std::ifstream{args[0]};
 
@@ -189,6 +191,8 @@ parseArg(std::string const &arg) {
     return DECOMPRESS;
   if (arg == "--level" || arg == "-l")
     return LEVEL;
+  if (arg == "help" || arg == "--help" || arg == "-h")
+    return HELP;
 
   return INVALID;
 }
