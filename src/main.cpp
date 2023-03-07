@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <vector>
 
@@ -41,7 +42,7 @@ enum OPTION {
 };
 
 OPTION
-parseArg(std::string const &arg);
+parse_arg(std::string const &arg);
 
 struct Options {
   OPTION inChannel = STDIO;
@@ -50,97 +51,39 @@ struct Options {
   std::string outData;
   OPTION direction = COMPRESS;
   int level = Z_DEFAULT_COMPRESSION;
-} option;
+};
 
-void print_help();
+void print_help(std::string const &arg);
+
+Options parse_options(std::vector<std::string> const &args);
+
+std::size_t file_size(std::ifstream &file);
+
+std::vector<Byte> read_input(Options const &options);
+
+void write_output(Options const &options, std::size_t ogSize,
+                  std::vector<Byte> const &data);
 
 int main(int argc, char *argv[]) {
   auto args = std::vector<std::string>{};
 
-  for (int i = 0; i < argc; ++i) {
+  for (int i = 1; i < argc; ++i) {
     args.emplace_back(argv[i]);
   }
 
-  // TODO: proper range checking
-  for (int i = 0; i < argc; ++i) {
-    switch (parseArg(args[i])) {
-    case INPUT: {
-      switch (parseArg(args[i++])) {
-      case STDIO: {
-        option.inChannel = STDIO;
-      } break;
-      case FILENAME: {
-        option.inChannel = FILENAME;
-        option.inData = args[++i];
-      } break;
-      case STRING: {
-        option.inChannel = STRING;
-        option.inData = args[++i];
-      } break;
-      default: {
-        print_help();
-        exit(1);
-      }
-      }
-    } break;
-    case OUTPUT: {
-      switch (parseArg(args[i++])) {
-      case STDIO: {
-        option.outChannel = STDIO;
-      } break;
-      case FILENAME: {
-        option.outChannel = FILENAME;
-        option.outData = args[++i];
-      } break;
-      case STRING: {
-        option.outChannel = STRING;
-        option.outData = args[++i];
-      } break;
-      case HELP:
-        [[fallthrough]];
-      default: {
-        print_help();
-        exit(1);
-      }
-      }
-    } break;
-    case DIRECTION: {
-      option.level = std::stoi(args[++i]);
-    } break;
-    default: {
-      print_help();
-      exit(1);
-    }
-    }
-  }
+  auto const options = parse_options(args);
 
-  auto in = std::vector<Byte>{};
-  in.reserve(65'536); // 2^16
-
-  // auto in = std::ifstream{args[0]};
-
-  // in.seekg(0, std::ios_base::end);
-  // auto const inSize = in.tellg();
-  // in.seekg(0);
-
-  while (auto c = std::getchar()) {
-    in.push_back(c);
-  }
+  auto in = read_input(options);
 
   auto out = std::vector<Byte>{};
 
-  /*  auto compResult = */ my_compress(in, out, Z_DEFAULT_COMPRESSION);
-
-  printf("Uncompressed size: %ld\nCompressed size: %ld\n\n", in.size(),
-         out.size());
-
-  my_decompress(out, in, in.size());
-  printf("\nUncompressed size: %ld\nCompressed size: %ld\n\n", in.size(),
-         out.size());
-
-  for (auto c : in) {
-    putchar(c);
+  if (options.direction == COMPRESS) {
+    my_compress(in, out, options.level);
+  } else {
+    my_decompress(in, out, in.size() * 4);
   }
+
+  write_output(options, in.size(), out);
 }
 
 int my_compress(std::vector<Byte> const &data, std::vector<Byte> &outBuffer,
@@ -163,8 +106,18 @@ DecompressResult my_decompress(std::vector<Byte> const &data,
   auto compressedSize = data.size();
   outBuffer.resize(buffSize);
 
-  auto const result = (COMPRESSION_RESULT)(uncompress2(
-      outBuffer.data(), &buffSize, data.data(), &compressedSize));
+  auto result = (COMPRESSION_RESULT)(uncompress2(outBuffer.data(), &buffSize,
+                                                 data.data(), &compressedSize));
+
+  while (result == COMPRESSION_RESULT::BUFFER_OOM) {
+    outBuffer.clear();
+    buffSize *= 4;
+    compressedSize = data.size();
+    outBuffer.resize(buffSize);
+
+    result = (COMPRESSION_RESULT)(uncompress2(outBuffer.data(), &buffSize,
+                                              data.data(), &compressedSize));
+  }
 
   outBuffer.resize(buffSize);
 
@@ -172,7 +125,7 @@ DecompressResult my_decompress(std::vector<Byte> const &data,
 }
 
 OPTION
-parseArg(std::string const &arg) {
+parse_arg(std::string const &arg) {
   if (arg == "--input" || arg == "-i")
     return INPUT;
   if (arg == "--output" || arg == "-o")
@@ -197,4 +150,140 @@ parseArg(std::string const &arg) {
   return INVALID;
 }
 
-void print_help() {}
+void print_help(std::string const &arg) {
+  printf("HELP TEXT: {%s}\n", arg.data());
+}
+
+Options parse_options(std::vector<std::string> const &args) {
+  auto option = Options{};
+
+  // TODO: proper range checking
+  for (auto i = 0ul; i < args.size(); ++i) {
+    switch (parse_arg(args[i])) {
+    case INPUT: {
+      switch (parse_arg(args[++i])) {
+      case STDIO: {
+        option.inChannel = STDIO;
+      } break;
+      case FILENAME: {
+        option.inChannel = FILENAME;
+        option.inData = args[++i];
+      } break;
+      case STRING: {
+        option.inChannel = STRING;
+        option.inData = args[++i];
+      } break;
+      default: {
+        print_help(args[i]);
+        exit(1);
+      }
+      }
+    } break;
+
+    case OUTPUT: {
+      switch (parse_arg(args[++i])) {
+      case STDIO: {
+        option.outChannel = STDIO;
+      } break;
+      case FILENAME: {
+        option.outChannel = FILENAME;
+        option.outData = args[++i];
+      } break;
+      case STRING: {
+        option.outChannel = STRING;
+        option.outData = args[++i];
+      } break;
+      case HELP:
+        [[fallthrough]];
+      default: {
+        print_help(args[i]);
+        exit(1);
+      }
+      }
+    } break;
+
+    case DIRECTION: {
+      option.direction = parse_arg(args[++i]);
+    } break;
+
+    case LEVEL: {
+      option.level = std::stoi(args[++i]);
+    } break;
+
+    default: {
+      print_help(args[i]);
+      exit(1);
+    }
+    }
+  }
+
+  return option;
+}
+
+std::size_t file_size(std::ifstream &file) {
+  auto const currentPos = file.tellg();
+
+  file.seekg(0, std::ios_base::end);
+  auto const size = file.tellg();
+
+  file.seekg(currentPos);
+
+  return size;
+}
+
+std::vector<Byte> read_input(Options const &options) {
+  auto buffer = std::vector<Byte>{};
+  buffer.reserve(65'536); // 2^16
+
+  switch (options.inChannel) {
+  case STDIO: {
+    while (auto c = std::getchar()) {
+      buffer.push_back(c);
+    }
+  } break;
+  case FILENAME: {
+    auto file = std::ifstream{options.inData};
+    buffer.resize(file_size(file));
+
+    for (auto i = 0ul; i < buffer.size(); ++i) {
+      buffer[i] = file.get();
+    }
+    file.close();
+  } break;
+  case STRING: {
+    buffer.resize(options.inData.size());
+    std::copy(options.inData.begin(), options.inData.end(), buffer.begin());
+  } break;
+
+  // TODO: Add error message
+  default: {
+    exit(1);
+  }
+  }
+
+  return buffer;
+}
+
+void write_output(Options const &options, std::size_t ogSize,
+                  std::vector<Byte> const &data) {
+  switch (options.outChannel) {
+  case STDIO: {
+    printf("Input was %lu bytes, output is %lu bytes.\n"
+           "Output is %4.1lf%% the size of input.\n"
+           "Resulting data:\n%*s",
+           ogSize, data.size(), 100 * (double)data.size() / ogSize,
+           (int)data.size(), data.data());
+  } break;
+  case FILENAME: {
+    printf("Input was %lu bytes, output is %lu bytes.\n"
+           "Output is %4.1lf%% the size of input.\n",
+           ogSize, data.size(), 100 * (double)data.size() / ogSize);
+    auto outFile = std::ofstream{options.outData};
+    outFile.write(reinterpret_cast<char const *>(data.data()), data.size());
+    outFile.close();
+  } break;
+  default: {
+    exit(1);
+  }
+  }
+}
