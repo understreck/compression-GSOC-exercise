@@ -1,3 +1,5 @@
+#include <exception>
+#include <stdexcept>
 #include <zlib.h>
 
 #include <algorithm>
@@ -18,14 +20,8 @@ enum COMPRESSION_RESULT : int {
 int my_compress(std::vector<Byte> const &data, std::vector<Byte> &outBuffer,
                 int level = Z_DEFAULT_COMPRESSION);
 
-struct DecompressResult {
-  COMPRESSION_RESULT compRes;
-  std::size_t bytesRead;
-};
-
-DecompressResult my_decompress(std::vector<Byte> const &data,
-                               std::vector<Byte> &outBuffer,
-                               std::size_t buffSize);
+int my_decompress(std::vector<Byte> const &data, std::vector<Byte> &outBuffer,
+                  std::size_t buffSize);
 
 enum OPTION {
   INVALID,
@@ -53,7 +49,7 @@ struct Options {
   int level = Z_DEFAULT_COMPRESSION;
 };
 
-void print_help(std::string const &arg);
+void print_help();
 
 Options parse_options(std::vector<std::string> const &args);
 
@@ -78,9 +74,19 @@ int main(int argc, char *argv[]) {
   auto out = std::vector<Byte>{};
 
   if (options.direction == COMPRESS) {
-    my_compress(in, out, options.level);
+    auto result = my_compress(in, out, options.level);
+
+    if (result != COMPRESSION_RESULT::OK) {
+      printf("Compression failed.\n");
+      return 1;
+    }
   } else {
-    my_decompress(in, out, in.size() * 4);
+    auto result = my_decompress(in, out, in.size() * 4);
+
+    if (result != COMPRESSION_RESULT::OK) {
+      printf("Compression failed.\n");
+      return 1;
+    }
   }
 
   write_output(options, in.size(), out);
@@ -100,9 +106,8 @@ int my_compress(std::vector<Byte> const &data, std::vector<Byte> &outBuffer,
   return result;
 }
 
-DecompressResult my_decompress(std::vector<Byte> const &data,
-                               std::vector<Byte> &outBuffer,
-                               std::size_t buffSize) {
+int my_decompress(std::vector<Byte> const &data, std::vector<Byte> &outBuffer,
+                  std::size_t buffSize) {
   auto compressedSize = data.size();
   outBuffer.resize(buffSize);
 
@@ -121,7 +126,7 @@ DecompressResult my_decompress(std::vector<Byte> const &data,
 
   outBuffer.resize(buffSize);
 
-  return {result, compressedSize};
+  return result;
 }
 
 OPTION
@@ -150,17 +155,45 @@ parse_arg(std::string const &arg) {
   return INVALID;
 }
 
-void print_help(std::string const &arg) {
-  printf("HELP TEXT: {%s}\n", arg.data());
+void print_help() {
+  printf(
+      "compression-exercise   [ [-i | --input]   [file <path> | stdio | string <string>] ]\n"
+      "                       [ [-o | --output]  [file <path> | stdio] ]\n"
+      "                       [ [-l | --level] <0-9>]\n"
+      "                       [ [-d | --direction]   [compress | decompress] ]\n"
+      "                       [-h | --help | help]\n\n"
+
+      "-i, --input:\n"
+      "  Set input channel. Default is stdio. Examples:\n"
+      "    compression-exercise -i file ./file/path.txt\n"
+      "    echo \"Compress this\\0\" | compression-exercise -i stdio\n"
+      "    compression-exercise -i string \"Compress this\"\n"
+      "-o, --output:\n"
+      "  Set output channel. Default is stdio. Examples:\n"
+      "    echo \"Compress this\\0\" | compression-exercise -o file "
+      "./file/path.txt\n"
+      "    echo \"Compress this\\0\" | compression-exercise -o stdio\n"
+      "-l, --level:\n"
+      "  Set compression level. 0 is none, 1 is fastest, 9 is best. Default is 6.\n"
+      "  Is ignored when decompressing. Example:\n"
+      "    compression-exercise -i string \"Compress this\" -l 9\n"
+      "-d, --direction:\n"
+      "  Set if program should compress or decompress input. Example:\n"
+      "    compression-exercise -i file compressed-input.zlib -d decompress\n");
 }
+
 
 Options parse_options(std::vector<std::string> const &args) {
   auto option = Options{};
 
-  // TODO: proper range checking
   for (auto i = 0ul; i < args.size(); ++i) {
     switch (parse_arg(args[i])) {
     case INPUT: {
+      if ((i + 1) >= args.size()) {
+        print_help();
+        exit(1);
+      }
+
       switch (parse_arg(args[++i])) {
       case STDIO: {
         option.inChannel = STDIO;
@@ -174,13 +207,18 @@ Options parse_options(std::vector<std::string> const &args) {
         option.inData = args[++i];
       } break;
       default: {
-        print_help(args[i]);
+        print_help();
         exit(1);
       }
       }
     } break;
 
     case OUTPUT: {
+      if ((i + 1) >= args.size()) {
+        print_help();
+        exit(1);
+      }
+
       switch (parse_arg(args[++i])) {
       case STDIO: {
         option.outChannel = STDIO;
@@ -196,22 +234,37 @@ Options parse_options(std::vector<std::string> const &args) {
       case HELP:
         [[fallthrough]];
       default: {
-        print_help(args[i]);
+        print_help();
         exit(1);
       }
       }
     } break;
 
     case DIRECTION: {
+      if ((i + 1) >= args.size()) {
+        print_help();
+        exit(1);
+      }
+
       option.direction = parse_arg(args[++i]);
     } break;
 
     case LEVEL: {
-      option.level = std::stoi(args[++i]);
+      if ((i + 1) >= args.size()) {
+        print_help();
+        exit(1);
+      }
+
+      try {
+        option.level = std::stoi(args[++i]);
+      } catch (std::logic_error const &) {
+        print_help();
+        exit(1);
+      }
     } break;
 
     default: {
-      print_help(args[i]);
+      print_help();
       exit(1);
     }
     }
@@ -243,6 +296,9 @@ std::vector<Byte> read_input(Options const &options) {
   } break;
   case FILENAME: {
     auto file = std::ifstream{options.inData};
+    if (not file.is_open()) {
+      printf("Could not open file \"%s\".\n", options.inData.data());
+    }
     buffer.resize(file_size(file));
 
     for (auto i = 0ul; i < buffer.size(); ++i) {
@@ -255,7 +311,6 @@ std::vector<Byte> read_input(Options const &options) {
     std::copy(options.inData.begin(), options.inData.end(), buffer.begin());
   } break;
 
-  // TODO: Add error message
   default: {
     exit(1);
   }
@@ -279,6 +334,9 @@ void write_output(Options const &options, std::size_t ogSize,
            "Output is %4.1lf%% the size of input.\n",
            ogSize, data.size(), 100 * (double)data.size() / ogSize);
     auto outFile = std::ofstream{options.outData};
+    if (not outFile.is_open()) {
+      printf("Could not open file \"%s\".\n", options.outData.data());
+    }
     outFile.write(reinterpret_cast<char const *>(data.data()), data.size());
     outFile.close();
   } break;
