@@ -1,6 +1,7 @@
 #include <zlib.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <exception>
 #include <fstream>
@@ -33,10 +34,24 @@ int main(int argc, char *argv[]) {
 
   auto outBuffer = std::vector<Byte>{};
 
+  auto const now = std::chrono::system_clock::now();
   if (my_compress(inBuffer, outBuffer, 6) != Z_OK) {
     printf("Compression failed.\n");
     return 1;
   }
+  auto const then = std::chrono::system_clock::now();
+
+  auto const minutes =
+      std::chrono::duration_cast<std::chrono::minutes>(then - now).count();
+
+  auto const seconds =
+      std::chrono::duration_cast<std::chrono::seconds>(then - now).count() -
+      60 * minutes;
+
+  auto const milliseconds =
+      std::chrono::duration_cast<std::chrono::milliseconds>(then - now)
+          .count() -
+      1000 * seconds;
 
   auto outFile = std::ofstream{argv[2]};
   if (not outFile.is_open()) {
@@ -47,9 +62,11 @@ int main(int argc, char *argv[]) {
   outFile.close();
 
   printf("Input was %lu bytes, output is %lu bytes.\n"
-         "Output is %4.1lf%% the size of input.\n",
+         "Output is %4.1lf%% the size of input.\n"
+         "It took %ld minutes %ld.%03ld seconds\n",
          inBuffer.size(), outBuffer.size(),
-         100 * (double)outBuffer.size() / inBuffer.size());
+         100 * (double)outBuffer.size() / inBuffer.size(), minutes, seconds,
+         milliseconds);
 }
 
 int my_compress(std::vector<Byte> const &data, std::vector<Byte> &outBuffer,
