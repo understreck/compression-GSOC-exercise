@@ -1,12 +1,9 @@
-#include <exception>
-#include <stdexcept>
 #include <zlib.h>
 
+#include <exception>
 #include <algorithm>
-#include <cstddef>
 #include <cstdio>
 #include <fstream>
-#include <iostream>
 #include <vector>
 
 enum COMPRESSION_RESULT : int {
