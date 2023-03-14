@@ -14,12 +14,6 @@ enum COMPRESSION_RESULT : int {
   INVALID_LEVEL                 // Invalid compression level
 };
 
-int my_compress(std::vector<Byte> const &data, std::vector<Byte> &outBuffer,
-                int level = Z_DEFAULT_COMPRESSION);
-
-int my_decompress(std::vector<Byte> const &data, std::vector<Byte> &outBuffer,
-                  std::size_t buffSize);
-
 enum OPTION {
   INVALID,
   HELP,
@@ -46,8 +40,6 @@ struct Options {
   int level = Z_DEFAULT_COMPRESSION;
 };
 
-void print_help();
-
 Options parse_options(std::vector<std::string> const &args);
 
 std::size_t file_size(std::ifstream &file);
@@ -56,6 +48,14 @@ std::vector<Byte> read_input(Options const &options);
 
 void write_output(Options const &options, std::size_t ogSize,
                   std::vector<Byte> const &data);
+
+void print_help();
+
+int my_compress(std::vector<Byte> const &data, std::vector<Byte> &outBuffer,
+                int level = Z_DEFAULT_COMPRESSION);
+
+int my_decompress(std::vector<Byte> const &data, std::vector<Byte> &outBuffer,
+                  std::size_t buffSize);
 
 int main(int argc, char *argv[]) {
   auto args = std::vector<std::string>{};
@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
     auto result = my_decompress(in, out, in.size() * 4);
 
     if (result != COMPRESSION_RESULT::OK) {
-      printf("Compression failed.\n");
+      printf("Decompression failed.\n");
       return 1;
     }
   }
