@@ -1,8 +1,9 @@
 #include <zlib.h>
 
-#include <exception>
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
+#include <exception>
 #include <fstream>
 #include <vector>
 
@@ -70,6 +71,7 @@ int main(int argc, char *argv[]) {
 
   auto out = std::vector<Byte>{};
 
+  auto now = std::chrono::system_clock::now();
   if (options.direction == COMPRESS) {
     auto result = my_compress(in, out, options.level);
 
@@ -85,6 +87,22 @@ int main(int argc, char *argv[]) {
       return 1;
     }
   }
+  auto const then = std::chrono::system_clock::now();
+
+  auto const minutes =
+      std::chrono::duration_cast<std::chrono::minutes>(then - now).count();
+
+  auto const seconds =
+      std::chrono::duration_cast<std::chrono::seconds>(then - now).count() -
+      60 * minutes;
+
+  auto const milliseconds =
+      std::chrono::duration_cast<std::chrono::milliseconds>(then - now)
+          .count() -
+      1000 * seconds;
+
+  printf("It took %ld minutes %ld.%03ld seconds.\n", minutes, seconds,
+         milliseconds);
 
   write_output(options, in.size(), out);
 }
@@ -178,7 +196,6 @@ void print_help() {
       "  Set if program should compress or decompress input. Example:\n"
       "    compression-exercise -i file compressed-input.zlib -d decompress\n");
 }
-
 
 Options parse_options(std::vector<std::string> const &args) {
   auto option = Options{};
