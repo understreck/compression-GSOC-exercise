@@ -59,6 +59,11 @@ int my_decompress(std::vector<Byte> const &data, std::vector<Byte> &outBuffer,
                   std::size_t buffSize);
 
 int main(int argc, char *argv[]) {
+  if(argc == 1) {
+    print_help();
+    return 0;
+  }
+    
   auto args = std::vector<std::string>{};
 
   for (int i = 1; i < argc; ++i) {
